@@ -61,8 +61,9 @@ class Gatherer:
 
 def save_img(url, filename):
     r = requests.get(url)
-    print("Error: Incorrect url", url, "for", filename)
-    return
+    if len(r.content) == 0:
+        print("Error: Incorrect url", url, "for", filename)
+        return
     with open(filename, "wb") as f:
         f.write(r.content)
 
@@ -92,7 +93,7 @@ class Compiler:
         self._dict = {}
         self._size = 0
         for l in f:
-            if l[0] == "#":
+            if l[0] == "#" or l[0] == "\n":
                 continue
             if l.startswith("SB:"):
                 count, name = l.split(maxsplit = 2)[1:]
