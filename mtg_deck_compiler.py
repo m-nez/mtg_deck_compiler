@@ -1,8 +1,8 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # -*- coding: UTF-8 -*-
 """
     MTG deck compiler
-    Copyright (C) 2016 Michał Nieznański
+    Copyright (C) 2016, 2017 Michał Nieznański
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -22,9 +22,13 @@ import re
 import requests
 import os.path
 import shlex
+import urllib
+import argparse
 from sys import argv
 
 class MagicCards:
+    _root = "http://magiccards.info"
+
     def make_query(cardname):
         cname = cardname.replace(" ", "+")
         query = "http://magiccards.info/query?q=%s&v=card&s=cname" % cname
@@ -41,10 +45,13 @@ class MagicCards:
         spl[2] = language
         return "/".join(spl)
 
-    def get_img_url(card):
+    @classmethod
+    def get_img_url(cls, card):
         q = MagicCards.make_query(card)
         r = requests.get(q)
         url = MagicCards.img_url(r.text, card)
+        if not url.startswith("http://"):
+            url = urllib.parse.urljoin(cls._root, url)
         return url
 
 class Gatherer:
@@ -68,26 +75,33 @@ def save_img(url, filename):
         f.write(r.content)
 
 class ImageMagic:
-    def resize(img):
+    _resolution = (312, 445)
+
+    @classmethod
+    def resize(cls, img):
         """
         Use ImageMagic to resize images to the common size
         """
-        command = "convert '%s' -resize %dx%d! '%s'" % (img, 312, 445, img)
+        command = "convert '%s' -resize %dx%d! '%s'" % (img, *cls._resolution, img)
         os.system(command)
-    def montage3x3(images, output):
+
+    @classmethod
+    def montage3x3(cls, images, output):
         """
         Make an image with a 3x3 table from input images
         """
         sources = " ".join(images)
-        os.system("montage -tile 3x3 -geometry +8+8 %s %s" % (sources, output))
+        os.system("montage -tile 3x3 -geometry %dx%d+8+8 %s %s" % (*cls._resolution, sources, output))
 
 class Compiler:
-    def __init__(self, deck, directory = "", prefix = "page"):
+    def __init__(self, deck, directory="", prefix="page", img_format="png"):
         self._directory = directory
         self._deck = deck
         self._dict = {}
         self._prefix = prefix
+        self._suffix = "".join([".", img_format])
         self.load_dec(deck)
+
     def load_dec(self, filename):
         f = open(filename, "r")
         self._dict = {}
@@ -106,6 +120,7 @@ class Compiler:
             else:
                 self._dict[name] += count
             self._size += count
+
     def download_img(self):
         """
         Download deck cards from magiccards or gatherer
@@ -115,14 +130,14 @@ class Compiler:
                 print("Found cached: %s" % card)
             else:
                 print("Downloading: %s" % card)
+                path = os.path.join(self._directory, card)
                 try:
                     url = MagicCards.get_img_url(card)
-                    save_img(url, os.path.join(self._directory, card))
+                    save_img(url, path)
                 except LookupError as e:
                     url = Gatherer.get_img_url(card)
-                    path = os.path.join(self._directory, card)
                     save_img(url, path)
-                    ImageMagic.resize(path)
+                ImageMagic.resize(path)
                     
     def check_cache(self, img):
         """
@@ -134,23 +149,25 @@ class Compiler:
         num_pages = (self._size - 1) // 9 + 1
         images = [shlex.quote(os.path.join(self._directory, im)) for im in self._dict for i in range(self._dict[im])]
         for i in range(num_pages):
-            ImageMagic.montage3x3(images[i * 9 : (i + 1) * 9], "".join([self._prefix, str(i)]))
+            ImageMagic.montage3x3(images[i * 9 : (i + 1) * 9], "".join([self._prefix, str(i), self._suffix]))
 
 
 if __name__ == "__main__":
-    if len(argv) < 3:
-        print("Usage:")
-        print("    mtg_deck_compiler deck_file output_prefix [cache_dir]")
-        exit(1)
+    parser = argparse.ArgumentParser(
+            description="Generate pages containg up to 9 cards from a deck file.")
+    parser.add_argument("deck_file",
+            type=str, help="path to a deck file with each line being: quantity cardname")
+    parser.add_argument("output_prefix",
+            type=str, help="prefix attached to each generated file")
+    parser.add_argument("-c", "--cache", default="/tmp/mtg_deck_compiler_cache",
+            type=str, help="directory with cached card images")
+    parser.add_argument("-f", "--format", default="png",
+            type=str, help="image format of the generate images")
+    args = parser.parse_args()
 
-    # Create cache dir
-    cache = "/tmp/mtg_deck_compiler_cache"
-    if len(argv) > 3:
-        cache = argv[3]
+    if not os.path.exists(args.cache):
+        os.makedirs(args.cache)
 
-    if not os.path.exists(cache):
-        os.makedirs(cache)
-
-    p = Compiler(argv[1], directory=cache, prefix=argv[2])
+    p = Compiler(args.deck_file, directory=args.cache, prefix=args.output_prefix, img_format=args.format)
     p.download_img()
     p.make_montage()
