@@ -9,7 +9,7 @@ Compile batches of card images
 
 # Usage
 ```
-./mtg_deck_compiler deck_file output_prefix [cache_dir]
+./mtg_deck_compiler.py [-h] [-c CACHE] [-f FORMAT] deck_file output_prefix
 ```
 
 Example deck file:  
