@@ -1,10 +1,19 @@
-#mtg_dec_compiler
+# mtg\_deck\_compiler
+
 Compile batches of card images
-#Dependencies
-ImageMagic  
-[python-requests](http://python-requests.org)  
-#Usage
-`./mtg_deck_compiler deck_file output_prefix [cache_dir]`  
-example deck file:  
+
+# Dependencies
+
+* ImageMagic  
+* [python-requests](http://python-requests.org)  
+
+# Usage
+```
+./mtg_deck_compiler deck_file output_prefix [cache_dir]
+```
+
+Example deck file:  
+```
 4 Plains  
 3 Gideon, Ally of Zendikar
+```
