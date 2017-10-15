@@ -21,7 +21,6 @@
 import re
 import requests
 import os.path
-import shlex
 import urllib
 import argparse
 from subprocess import call
@@ -91,8 +90,8 @@ class ImageMagic:
         """
         Make an image with a 3x3 table from input images
         """
-        sources = " ".join(images)
-        os.system("montage -tile 3x3 -geometry %dx%d+8+8 %s %s" % (*cls._resolution, sources, output))
+        size = "%dx%d+8+8" % (cls._resolution)
+        call(["montage", "-tile", "3x3", "-geometry", size, *images, output])
 
 class Compiler:
     def __init__(self, deck, directory="", prefix="page", img_format="png"):
@@ -148,7 +147,7 @@ class Compiler:
 
     def make_montage(self):
         num_pages = (self._size - 1) // 9 + 1
-        images = [shlex.quote(os.path.join(self._directory, im)) for im in self._dict for i in range(self._dict[im])]
+        images = [os.path.join(self._directory, im) for im in self._dict for i in range(self._dict[im])]
         for i in range(num_pages):
             ImageMagic.montage3x3(images[i * 9 : (i + 1) * 9], "".join([self._prefix, str(i), self._suffix]))
 
