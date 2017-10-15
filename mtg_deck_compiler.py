@@ -24,6 +24,7 @@ import os.path
 import shlex
 import urllib
 import argparse
+from subprocess import call
 from sys import argv
 
 class MagicCards:
@@ -82,8 +83,8 @@ class ImageMagic:
         """
         Use ImageMagic to resize images to the common size
         """
-        command = "convert '%s' -resize %dx%d! '%s'" % (img, *cls._resolution, img)
-        os.system(command)
+        new_size = '%dx%d!' % cls._resolution
+        call(['convert', img, '-resize', new_size, img])
 
     @classmethod
     def montage3x3(cls, images, output):
