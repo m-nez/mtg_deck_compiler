@@ -23,9 +23,19 @@ import requests
 import os.path
 import urllib
 import argparse
+import uuid
 from subprocess import call
 from sys import argv
 
+def exists_abort(*args):
+    for p in args:
+        if os.path.exists(p):
+            ans = input("".join(["Warning: ",
+                p, " already exists. Do you want to overwrite it? [y/n] "]))
+            if ans != "y":
+                print("Aborting")
+                exit(0)
+        
 class MagicCards:
     _root = "http://magiccards.info"
 
@@ -93,15 +103,20 @@ class ImageMagic:
         size = "%dx%d+8+8" % (cls._resolution)
         call(["montage", "-tile", "3x3", "-geometry", size, *images, output])
 
+    @staticmethod
+    def convert(images, output):
+        call(["convert", *images, output])
+
 class Compiler:
-    def __init__(self, deck, directory="", prefix="page", img_format="png"):
+    def __init__(self, deck, directory="", prefix="page", img_format="png", overwrite=False):
         self._directory = directory
         self._deck = deck
         self._dict = {}
         self._prefix = prefix
         self._suffix = "".join([".", img_format])
         self.load_dec(deck)
-
+        self._images = []
+        self._overwrite = overwrite
     def load_dec(self, filename):
         f = open(filename, "r")
         self._dict = {}
@@ -133,10 +148,11 @@ class Compiler:
                 path = os.path.join(self._directory, card)
                 try:
                     url = MagicCards.get_img_url(card)
-                    save_img(url, path)
                 except LookupError as e:
                     url = Gatherer.get_img_url(card)
-                    save_img(url, path)
+                if not self._overwrite:
+                    exists_abort(path)
+                save_img(url, path)
                 ImageMagic.resize(path)
                     
     def check_cache(self, img):
@@ -148,26 +164,55 @@ class Compiler:
     def make_montage(self):
         num_pages = (self._size - 1) // 9 + 1
         images = [os.path.join(self._directory, im) for im in self._dict for i in range(self._dict[im])]
+        self._images = []
         for i in range(num_pages):
-            ImageMagic.montage3x3(images[i * 9 : (i + 1) * 9], "".join([self._prefix, str(i), self._suffix]))
+            output = "".join([self._prefix, str(i), self._suffix])
+            if not self._overwrite:
+                exists_abort(output)
+            ImageMagic.montage3x3(images[i * 9 : (i + 1) * 9], output)
+            self._images.append(output)
 
+    def merge_pdf(self, output):
+        if not output.lower().endswith(".pdf"):
+            output = "".join([output, ".pdf"])
+        if not self._overwrite:
+            exists_abort(output)
+        ImageMagic.convert(self._images, output)
+
+    def remove_images(self):
+        call(["rm", *self._images])
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
             description="Generate pages containg up to 9 cards from a deck file.")
     parser.add_argument("deck_file",
             type=str, help="path to a deck file with each line being: quantity cardname")
-    parser.add_argument("output_prefix",
+    parser.add_argument("-p", "--prefix", default=uuid.uuid1().hex,
             type=str, help="prefix attached to each generated file")
     parser.add_argument("-c", "--cache", default="/tmp/mtg_deck_compiler_cache",
             type=str, help="directory with cached card images")
     parser.add_argument("-f", "--format", default="png",
-            type=str, help="image format of the generate images")
+            type=str, help="image format of the generated images")
+    parser.add_argument("-m", "--merge", default="",
+            help="path to merged pdf file generated from images")
+    parser.add_argument("-k", "--keep", action="store_true",
+            help="don't delete the images after generating the merged pdf")
+    parser.add_argument("-o", "--overwrite", action="store_true",
+            help="overwrite files without asking")
     args = parser.parse_args()
 
     if not os.path.exists(args.cache):
         os.makedirs(args.cache)
 
-    p = Compiler(args.deck_file, directory=args.cache, prefix=args.output_prefix, img_format=args.format)
+    p = Compiler(
+            args.deck_file,
+            directory=args.cache,
+            prefix=args.prefix,
+            img_format=args.format,
+            overwrite=args.overwrite)
     p.download_img()
     p.make_montage()
+    if args.merge:
+        p.merge_pdf(args.merge)
+        if not args.keep:
+            p.remove_images()

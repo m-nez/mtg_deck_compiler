@@ -9,7 +9,12 @@ Compile batches of card images
 
 # Usage
 ```
-./mtg_deck_compiler.py [-h] [-c CACHE] [-f FORMAT] deck_file output_prefix
+./mtg_deck_compiler.py [-h] [-p PREFIX] [-c CACHE] [-f FORMAT] [-m MERGE] [-k] [-o] deck_file
+```
+
+Example (generate a single pdf):  
+```
+./mtg_deck_compiler.py deck.txt -m deck.pdf -c ~/.mtg_deck_compiler/cache
 ```
 
 Example deck file:  
