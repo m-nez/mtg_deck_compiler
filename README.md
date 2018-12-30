@@ -4,9 +4,9 @@ Compile batches of card images
 
 # Dependencies
 
-* ImageMagic  
+* ImageMagick  
 * [python-requests](http://python-requests.org)  
-* fpdf
+* fpdf  
 
 Install python packages:
 ```
