@@ -6,6 +6,12 @@ Compile batches of card images
 
 * ImageMagic  
 * [python-requests](http://python-requests.org)  
+* fpdf
+
+Install python packages:
+```
+pip install -r requirements.txt
+```
 
 # Usage
 ```
