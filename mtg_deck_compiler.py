@@ -24,8 +24,9 @@ import os.path
 import urllib
 import argparse
 import uuid
+import logging
 from subprocess import call
-from sys import argv
+from fpdf import FPDF
 
 def exists_abort(*args):
     for p in args:
@@ -76,6 +77,16 @@ class Gatherer:
         url = "".join(["http://gatherer.wizards.com/Handlers/Image.ashx?multiverseid=", mvid, "&type=card"])
         return url
 
+class Scryfall:
+    def save_img(cardname, filename):
+        response = requests.get(
+                "https://api.scryfall.com/cards/named",
+                params={"exact" : cardname, "format" : "image"}
+                )
+        with open(filename, "wb") as f:
+            f.write(response.content)
+
+
 def save_img(url, filename):
     r = requests.get(url)
     if len(r.content) == 0:
@@ -101,11 +112,25 @@ class ImageMagic:
         Make an image with a 3x3 table from input images
         """
         size = "%dx%d+8+8" % (cls._resolution)
-        call(["montage", "-tile", "3x3", "-geometry", size, *images, output])
+        call(["montage", "-tile", "3x3", "-geometry", size, "-depth", "8", *images, output])
 
     @staticmethod
     def convert(images, output):
         call(["convert", *images, output])
+
+class ImageTools:
+    _w = 210
+    _h = 297
+
+    @classmethod
+    def pdf_from_images(cls, images, output):
+        pdf = FPDF()
+        for image in images:
+            pdf.add_page()
+            pdf.image(image, x=0, y=0, w=cls._w, h=cls._h)
+        pdf.output(output, "F")
+
+
 
 class Compiler:
     def __init__(self, deck, directory="", prefix="page", img_format="png", overwrite=False):
@@ -146,13 +171,20 @@ class Compiler:
             else:
                 print("Downloading: %s" % card)
                 path = os.path.join(self._directory, card)
+                
+                exists_abort(path)
                 try:
-                    url = MagicCards.get_img_url(card)
-                except LookupError as e:
-                    url = Gatherer.get_img_url(card)
-                if not self._overwrite:
-                    exists_abort(path)
-                save_img(url, path)
+                    Scryfall.save_img(card, path)
+                except Exception as e:
+                    logging.info(e)
+                    try:
+                        url = MagicCards.get_img_url(card)
+                    except LookupError as e:
+                        logging.info(e)
+                        url = Gatherer.get_img_url(card)
+                    if not self._overwrite:
+                        exists_abort(path)
+                    save_img(url, path)
                 ImageMagic.resize(path)
                     
     def check_cache(self, img):
@@ -177,7 +209,7 @@ class Compiler:
             output = "".join([output, ".pdf"])
         if not self._overwrite:
             exists_abort(output)
-        ImageMagic.convert(self._images, output)
+        ImageTools.pdf_from_images(self._images, output)
 
     def remove_images(self):
         call(["rm", *self._images])
@@ -199,7 +231,11 @@ if __name__ == "__main__":
             help="don't delete the images after generating the merged pdf")
     parser.add_argument("-o", "--overwrite", action="store_true",
             help="overwrite files without asking")
+    parser.add_argument("-l", "--log-level", default="INFO", choices=["CRITICAL", "INFO"],
+            help="set log level")
     args = parser.parse_args()
+
+    logging.basicConfig(level=args.log_level)
 
     if not os.path.exists(args.cache):
         os.makedirs(args.cache)
